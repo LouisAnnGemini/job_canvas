@@ -1,0 +1,5 @@
+{
+  "name": "TaskFlow Canvas",
+  "description": "A fluid task management system with a spreadsheet-like table view and a spatial whiteboard view for organizing tasks into frames.",
+  "requestFramePermissions": []
+}
