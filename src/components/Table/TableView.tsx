@@ -579,7 +579,11 @@ function MultiSelect({ options, selected, onChange, onAddOption, placeholder, op
       }
     };
     
-    const handleScroll = () => {
+    const handleScroll = (e: Event) => {
+      const portalDropdown = document.getElementById('multiselect-portal-dropdown');
+      if (portalDropdown && e.target instanceof Node && (e.target === portalDropdown || portalDropdown.contains(e.target))) {
+        return;
+      }
       if (isOpen) setIsOpen(false);
     };
 
