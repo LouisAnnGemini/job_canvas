@@ -256,6 +256,22 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                       );
                     }
                     
+                    if (col.type === 'date') {
+                      return (
+                        <td key={col.id} className="p-0 border-r border-zinc-100 last:border-r-0 align-top" style={{ width: col.width || 150 }}>
+                          <input
+                            type="date"
+                            className="w-full h-full p-3 bg-transparent outline-none focus:bg-blue-50/50 transition-colors text-sm text-zinc-600 font-mono"
+                            value={value || ''}
+                            onChange={(e) => {
+                              if (col.isCustom) updateTask(task.id, { customFields: { ...task.customFields, [col.id]: e.target.value } });
+                              else updateTask(task.id, { [col.field]: e.target.value });
+                            }}
+                          />
+                        </td>
+                      );
+                    }
+                    
                     if (col.type === 'text' || col.type === 'number') {
                       return (
                         <td key={col.id} className="p-0 border-r border-zinc-100 last:border-r-0 align-top" style={{ width: col.width || 150 }}>
@@ -364,6 +380,7 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                 <select className="w-full p-2 border border-zinc-300 rounded-md outline-none focus:border-blue-500" value={newColType} onChange={e => setNewColType(e.target.value as ColumnType)}>
                   <option value="text">Text</option>
                   <option value="number">Number</option>
+                  <option value="date">Date</option>
                   <option value="select">Single Select</option>
                   <option value="multi-select">Multi Select</option>
                 </select>
