@@ -6,10 +6,12 @@ import { TaskDetailModal } from './components/TaskDetail/TaskDetailModal';
 import { FilterBar } from './components/FilterBar';
 import { TemplateManagerModal } from './components/Templates/TemplateManagerModal';
 import { UseTemplateModal } from './components/Templates/UseTemplateModal';
-import { LayoutGrid, TableProperties, FileText, FilePlus, Download, Upload } from 'lucide-react';
+import { RuleManagerModal } from './components/Rules/RuleManagerModal';
+import { LayoutGrid, TableProperties, FileText, FilePlus, Download, Upload, Workflow, FileSpreadsheet } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useStore } from './store/useStore';
+import * as XLSX from 'xlsx';
 
 function cn(...inputs: any[]) {
   return twMerge(clsx(inputs));
@@ -21,6 +23,7 @@ export default function App() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [isUseTemplateOpen, setIsUseTemplateOpen] = useState(false);
+  const [isRuleManagerOpen, setIsRuleManagerOpen] = useState(false);
 
   const handleExport = () => {
     const state = useStore.getState();
@@ -37,6 +40,36 @@ export default function App() {
     a.download = 'taskflow-export.json';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportXlsx = () => {
+    const state = useStore.getState();
+    const { tasks, columns } = state;
+
+    const data = tasks.map(task => {
+      const row: Record<string, any> = {};
+      columns.forEach(col => {
+        let value;
+        if (col.isCustom) {
+          value = task.customFields[col.id];
+        } else {
+          value = (task as any)[col.field];
+        }
+        
+        // Handle arrays (like multi-select)
+        if (Array.isArray(value)) {
+          value = value.join(', ');
+        }
+        
+        row[col.name] = value;
+      });
+      return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Tasks");
+    XLSX.writeFile(wb, "taskflow-tasks.xlsx");
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,7 +94,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-white overflow-hidden font-sans">
+    <div className="w-full h-screen flex flex-col bg-white overflow-hidden font-sans">
       {/* Header */}
       <header className="h-14 border-b border-zinc-200 flex items-center justify-between px-6 shrink-0 bg-white z-10">
         <div className="flex items-center gap-3">
@@ -97,15 +130,22 @@ export default function App() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 mr-2 border-r border-zinc-200 pr-3">
             <button 
+              onClick={handleExportXlsx}
+              className="p-1.5 text-zinc-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              title="Export to Excel"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+            </button>
+            <button 
               onClick={handleExport}
               className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
-              title="Export Data"
+              title="Export JSON Backup"
             >
               <Download className="w-4 h-4" />
             </button>
             <label 
               className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
-              title="Import Data"
+              title="Import JSON Backup"
             >
               <Upload className="w-4 h-4" />
               <input type="file" accept=".json" className="hidden" onChange={handleImport} />
@@ -117,6 +157,13 @@ export default function App() {
           >
             <FileText className="w-4 h-4" />
             Templates
+          </button>
+          <button 
+            onClick={() => setIsRuleManagerOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+          >
+            <Workflow className="w-4 h-4" />
+            Rules
           </button>
           <button 
             onClick={() => setIsUseTemplateOpen(true)}
@@ -131,7 +178,7 @@ export default function App() {
       <FilterBar />
 
       {/* Main Content */}
-      <main className="flex-1 relative">
+      <main className="flex-1 relative min-h-0">
         {view === 'table' ? (
           <TableView 
             onOpenColumnManager={() => setIsColumnManagerOpen(true)} 
@@ -160,6 +207,9 @@ export default function App() {
       )}
       {isUseTemplateOpen && (
         <UseTemplateModal onClose={() => setIsUseTemplateOpen(false)} />
+      )}
+      {isRuleManagerOpen && (
+        <RuleManagerModal onClose={() => setIsRuleManagerOpen(false)} />
       )}
     </div>
   );

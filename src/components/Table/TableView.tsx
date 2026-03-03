@@ -123,9 +123,9 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
         <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden overflow-x-auto">
           <table className="w-full text-left border-collapse table-fixed min-w-max">
             <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50/50">
-                <th className="w-16 p-0 sticky left-0 bg-zinc-50/50 z-20 border-r border-zinc-200">
-                  <div className="p-3 flex items-center justify-center h-full">
+              <tr className="border-b border-zinc-200 bg-zinc-50">
+                <th className="w-28 p-0 sticky left-0 top-0 bg-zinc-50 z-30 border-r border-zinc-200">
+                  <div className="p-3 flex items-center justify-center h-full border-b border-zinc-200">
                     <div
                       className={cn(
                         "w-4 h-4 rounded-full border flex items-center justify-center cursor-pointer transition-colors",
@@ -150,14 +150,14 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                 {visibleColumns.map((col, index) => (
                   <th 
                     key={col.id} 
-                    className="p-0 relative text-zinc-500 font-medium text-xs uppercase tracking-wider select-none group border-r border-zinc-200 last:border-r-0"
+                    className="p-0 sticky top-0 z-10 bg-zinc-50 text-zinc-500 font-medium text-xs uppercase tracking-wider select-none group border-r border-zinc-200 last:border-r-0"
                     style={{ width: col.width || 150 }}
                     draggable={!resizingCol}
                     onDragStart={(e) => handleDragStart(e, index)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, index)}
                   >
-                    <div className="p-3 flex items-center gap-2 cursor-grab active:cursor-grabbing w-full h-full overflow-hidden">
+                    <div className="p-3 flex items-center gap-2 cursor-grab active:cursor-grabbing w-full h-full overflow-hidden border-b border-zinc-200">
                       <span className="truncate">{col.name}</span>
                       {col.isCustom && (col.type === 'select' || col.type === 'multi-select' || col.type === 'text') && (
                         <button
@@ -182,14 +182,16 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                     />
                   </th>
                 ))}
-                <th className="p-3 w-12">
-                  <button onClick={() => {
-                    setNewColName('');
-                    setNewColType('text');
-                    setAddingColumn(true);
-                  }} className="p-1 hover:bg-zinc-200 rounded text-zinc-400">
-                    <Plus className="w-4 h-4" />
-                  </button>
+                <th className="p-0 w-12 sticky top-0 z-10 bg-zinc-50 border-b border-zinc-200">
+                  <div className="p-3 flex items-center justify-center">
+                    <button onClick={() => {
+                      setNewColName('');
+                      setNewColType('text');
+                      setAddingColumn(true);
+                    }} className="p-1 hover:bg-zinc-200 rounded text-zinc-400">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </th>
               </tr>
             </thead>
@@ -243,6 +245,13 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                         )}
                       </div>
                       <button 
+                        onClick={() => duplicateTasks([task.id])}
+                        className="p-1.5 text-zinc-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                        title="Duplicate Task"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button 
                         onClick={() => onOpenTaskDetail(task.id)}
                         className="p-1.5 text-zinc-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
                         title="Open Task Details"
@@ -258,7 +267,10 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                       return (
                         <td key={col.id} className="p-3 text-center border-r border-zinc-100 last:border-r-0" style={{ width: col.width || 150 }}>
                           <button
-                            onClick={() => updateTask(task.id, { [col.field]: !value })}
+                            onClick={() => {
+                              if (col.isCustom) updateTask(task.id, { customFields: { ...task.customFields, [col.id]: !value } });
+                              else updateTask(task.id, { [col.field]: !value });
+                            }}
                             className={cn(
                               "w-5 h-5 rounded border flex items-center justify-center transition-colors mx-auto",
                               value ? "bg-emerald-500 border-emerald-500 text-white" : "border-zinc-300 hover:border-zinc-400 bg-white"
@@ -395,6 +407,7 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                   <option value="text">Text</option>
                   <option value="number">Number</option>
                   <option value="date">Date</option>
+                  <option value="checkbox">Checkbox</option>
                   <option value="select">Single Select</option>
                   <option value="multi-select">Multi Select</option>
                 </select>

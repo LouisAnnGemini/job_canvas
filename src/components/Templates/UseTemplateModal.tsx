@@ -35,7 +35,6 @@ export function UseTemplateModal({ onClose }: { onClose: () => void }) {
         description: taskData.description || '',
         urgency: taskData.urgency || null,
         categories: taskData.categories || [],
-        assignees: taskData.assignees || [],
         customFields: taskData.customFields || {},
         x: window.innerWidth / 2 - 125 + (index * 30),
         y: window.innerHeight / 2 - 75 + (index * 30),

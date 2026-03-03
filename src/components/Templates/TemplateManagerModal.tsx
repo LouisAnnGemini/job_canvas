@@ -36,7 +36,6 @@ export function TemplateManagerModal({ onClose }: { onClose: () => void }) {
       description: '',
       urgency: null,
       categories: [],
-      assignees: [],
       customFields: {}
     };
     updateTemplate(selectedTemplate.id, { tasks: [...(selectedTemplate.tasks || []), newTask] });

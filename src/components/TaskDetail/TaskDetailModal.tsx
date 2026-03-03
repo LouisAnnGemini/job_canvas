@@ -46,7 +46,7 @@ export function TaskDetailModal({ taskId, onClose, onOpenTaskDetail }: { taskId:
           {columns.map(col => {
             const value = col.isCustom ? task.customFields[col.id] : task[col.field as keyof Task];
             
-            if (col.type === 'checkbox') return null; // Handled in header
+            if (col.field === 'completed') return null; // Handled in header
             
             return (
               <div key={col.id} className="space-y-1.5">
@@ -55,7 +55,23 @@ export function TaskDetailModal({ taskId, onClose, onOpenTaskDetail }: { taskId:
                   {!col.visible && <span className="text-[10px] uppercase tracking-wider bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded">Hidden in Table</span>}
                 </label>
                 
-                {col.type === 'text' || col.type === 'number' || col.type === 'date' ? (
+                {col.type === 'checkbox' ? (
+                  <div className="flex items-center gap-2">
+                     <button
+                        onClick={() => {
+                          if (col.isCustom) updateTask(task.id, { customFields: { ...task.customFields, [col.id]: !value } });
+                          else updateTask(task.id, { [col.field]: !value });
+                        }}
+                        className={cn(
+                          "w-5 h-5 rounded border flex items-center justify-center transition-colors",
+                          value ? "bg-emerald-500 border-emerald-500 text-white" : "border-zinc-300 hover:border-zinc-400 bg-white"
+                        )}
+                      >
+                        {value && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      <span className="text-sm text-zinc-600">{value ? 'Checked' : 'Unchecked'}</span>
+                  </div>
+                ) : col.type === 'text' || col.type === 'number' || col.type === 'date' ? (
                   col.field === 'description' ? (
                     <textarea
                       className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm text-zinc-900 min-h-[100px] resize-y"

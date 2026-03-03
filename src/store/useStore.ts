@@ -30,7 +30,6 @@ export interface Task {
   completed: boolean;
   urgency: string | null;
   categories: string[];
-  assignees: string[];
   customFields: Record<string, any>;
   x: number;
   y: number;
@@ -45,7 +44,6 @@ export interface TemplateTask {
   description: string;
   urgency: string | null;
   categories: string[];
-  assignees: string[];
   customFields: Record<string, any>;
 }
 
@@ -116,7 +114,6 @@ export const useStore = create<AppState>()(
       completed: false,
       urgency: 'High',
       categories: ['Design', 'UI'],
-      assignees: ['Alice'],
       customFields: {},
       x: 100,
       y: 100,
@@ -128,7 +125,6 @@ export const useStore = create<AppState>()(
       completed: true,
       urgency: 'Low',
       categories: ['DevOps'],
-      assignees: ['Bob'],
       customFields: {},
       x: 400,
       y: 100,
@@ -141,7 +137,6 @@ export const useStore = create<AppState>()(
     { id: 'col_desc', field: 'description', name: 'Description', type: 'text', visible: true, isCustom: false, width: 300 },
     { id: 'col_urgency', field: 'urgency', name: 'Urgency', type: 'select', visible: true, isCustom: false, options: ['High', 'Medium', 'Low'], optionColors: { 'High': 'red', 'Medium': 'yellow', 'Low': 'green' }, width: 150 },
     { id: 'col_cat', field: 'categories', name: 'Category', type: 'multi-select', visible: true, isCustom: false, options: ['Design', 'UI', 'DevOps', 'Frontend', 'Backend'], width: 200 },
-    { id: 'col_assignee', field: 'assignees', name: 'Assignee', type: 'multi-select', visible: true, isCustom: false, options: ['Alice', 'Bob', 'Charlie'], width: 150 },
   ],
   templates: [],
   searchQuery: '',
@@ -161,7 +156,6 @@ export const useStore = create<AppState>()(
       completed: false,
       urgency: null,
       categories: [],
-      assignees: [],
       customFields: {},
       x: Math.random() * 200,
       y: Math.random() * 200,
@@ -295,7 +289,6 @@ export const useStore = create<AppState>()(
         description: '',
         urgency: null,
         categories: [],
-        assignees: [],
         customFields: {}
       }],
       ...template
