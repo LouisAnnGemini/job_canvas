@@ -3,18 +3,18 @@ import { useStore, Column, LinkageRule } from '../../store/useStore';
 import { X, Plus, Trash2, ArrowRight, Download, Upload, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-export function RuleManagerModal({ onClose }: { onClose: () => void }) {
+export function RuleManagerModal({ onClose }: { onClose?: () => void }) {
   const { columns, updateColumn } = useStore();
   const [selectedSourceColumnId, setSelectedSourceColumnId] = useState<string>('');
   
-  // Filter columns that can be source columns (text, select, multi-select)
-  const sourceColumns = columns.filter(c => c.isCustom && (c.type === 'text' || c.type === 'select' || c.type === 'multi-select'));
+  // Filter columns that can be source columns (include default columns like Status)
+  const sourceColumns = columns.filter(c => c.type === 'text' || c.type === 'select' || c.type === 'multi-select' || c.type === 'checkbox');
   
   const selectedColumn = columns.find(c => c.id === selectedSourceColumnId);
   const rules = selectedColumn?.linkageRules || [];
 
-  // Target columns for the selected source
-  const targetColumns = columns.filter(c => c.id !== selectedSourceColumnId && (c.type === 'text' || c.type === 'select' || c.type === 'number'));
+  // Target columns for the selected source (allow all columns except source)
+  const targetColumns = columns.filter(c => c.id !== selectedSourceColumnId);
 
   // New Rule State
   const [newTriggerValue, setNewTriggerValue] = useState('');
@@ -166,51 +166,53 @@ export function RuleManagerModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl h-[80vh] flex flex-col border border-zinc-200">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-zinc-200 bg-zinc-50/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-              <FileSpreadsheet className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-900">Linkage Rules Manager</h3>
-              <p className="text-xs text-zinc-500">Configure automatic one-way field updates</p>
-            </div>
+    <div className="w-full h-full flex flex-col bg-white">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-zinc-200 bg-zinc-50/50 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+            <FileSpreadsheet className="w-5 h-5" />
           </div>
-          <div className="flex items-center gap-2">
-             <button 
-              onClick={handleExportRules}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 hover:bg-zinc-50 rounded-lg transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              Export Rules
-            </button>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 hover:bg-zinc-50 rounded-lg transition-colors"
-            >
-              <Upload className="w-4 h-4" />
-              Import Rules
-            </button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleImportRules} 
-              accept=".xlsx, .xls" 
-              className="hidden" 
-            />
-            <div className="w-px h-6 bg-zinc-200 mx-2" />
-            <button onClick={onClose} className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors">
-              <X className="w-5 h-5" />
-            </button>
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-900">Linkage Rules Manager</h3>
+            <p className="text-xs text-zinc-500">Configure automatic one-way field updates</p>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+           <button 
+            onClick={handleExportRules}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 hover:bg-zinc-50 rounded-lg transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export Rules
+          </button>
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 hover:bg-zinc-50 rounded-lg transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Import Rules
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImportRules} 
+            accept=".xlsx, .xls" 
+            className="hidden" 
+          />
+          {onClose && (
+            <>
+              <div className="w-px h-6 bg-zinc-200 mx-2" />
+              <button onClick={onClose} className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
-        {/* Content */}
-        <div className="flex flex-1 overflow-hidden">
+      {/* Content */}
+      <div className="flex flex-1 overflow-hidden">
           
           {/* Sidebar: Source Column Selection */}
           <div className="w-64 border-r border-zinc-200 overflow-y-auto bg-zinc-50/30 p-4">
@@ -261,6 +263,16 @@ export function RuleManagerModal({ onClose }: { onClose: () => void }) {
                             <option key={opt} value={opt}>{opt}</option>
                           ))}
                         </select>
+                      ) : selectedColumn?.type === 'checkbox' ? (
+                        <select 
+                          className="w-full p-2 border border-zinc-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"
+                          value={newTriggerValue}
+                          onChange={e => setNewTriggerValue(e.target.value)}
+                        >
+                          <option value="">Select option...</option>
+                          <option value="true">Checked</option>
+                          <option value="false">Unchecked</option>
+                        </select>
                       ) : (
                         <input 
                           type="text" 
@@ -307,11 +319,22 @@ export function RuleManagerModal({ onClose }: { onClose: () => void }) {
                             <option key={opt} value={opt}>{opt}</option>
                           ))}
                         </select>
+                      ) : selectedTargetColumn?.type === 'checkbox' ? (
+                        <select 
+                          className="w-full p-2 border border-zinc-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"
+                          value={newTargetValue}
+                          onChange={e => setNewTargetValue(e.target.value)}
+                          disabled={!newTargetColumnId}
+                        >
+                          <option value="">Select option...</option>
+                          <option value="true">Checked</option>
+                          <option value="false">Unchecked</option>
+                        </select>
                       ) : (
                         <input 
-                          type={selectedTargetColumn?.type === 'number' ? 'number' : 'text'}
+                          type={selectedTargetColumn?.type === 'number' ? 'number' : (selectedTargetColumn?.type === 'date' ? 'date' : 'text')}
                           className="w-full p-2 border border-zinc-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"
-                          placeholder="Enter value..."
+                          placeholder={selectedTargetColumn?.type === 'date' ? '' : "Enter value..."}
                           value={newTargetValue}
                           onChange={e => setNewTargetValue(e.target.value)}
                           disabled={!newTargetColumnId}
@@ -378,6 +401,5 @@ export function RuleManagerModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-    </div>
   );
 }

@@ -18,12 +18,11 @@ function cn(...inputs: any[]) {
 }
 
 export default function App() {
-  const [view, setView] = useState<'table' | 'whiteboard'>('table');
+  const [view, setView] = useState<'table' | 'whiteboard' | 'rules'>('table');
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [isUseTemplateOpen, setIsUseTemplateOpen] = useState(false);
-  const [isRuleManagerOpen, setIsRuleManagerOpen] = useState(false);
 
   const handleExport = () => {
     const state = useStore.getState();
@@ -115,6 +114,16 @@ export default function App() {
             <TableProperties className="w-4 h-4" />
             Table
           </button>
+          <button 
+            onClick={() => setView('rules')}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all mx-1",
+              view === 'rules' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+            )}
+          >
+            <Workflow className="w-4 h-4" />
+            Rules
+          </button>
           <button
             onClick={() => setView('whiteboard')}
             className={cn(
@@ -159,13 +168,6 @@ export default function App() {
             Templates
           </button>
           <button 
-            onClick={() => setIsRuleManagerOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
-          >
-            <Workflow className="w-4 h-4" />
-            Rules
-          </button>
-          <button 
             onClick={() => setIsUseTemplateOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200"
           >
@@ -175,19 +177,23 @@ export default function App() {
         </div>
       </header>
 
-      <FilterBar />
+      {view !== 'rules' && <FilterBar />}
 
       {/* Main Content */}
       <main className="flex-1 relative min-h-0">
-        {view === 'table' ? (
+        {view === 'table' && (
           <TableView 
             onOpenColumnManager={() => setIsColumnManagerOpen(true)} 
             onOpenTaskDetail={(id) => setExpandedTaskId(id)} 
           />
-        ) : (
+        )}
+        {view === 'whiteboard' && (
           <WhiteboardView 
             onOpenTaskDetail={(id) => setExpandedTaskId(id)} 
           />
+        )}
+        {view === 'rules' && (
+          <RuleManagerModal />
         )}
       </main>
 
@@ -207,9 +213,6 @@ export default function App() {
       )}
       {isUseTemplateOpen && (
         <UseTemplateModal onClose={() => setIsUseTemplateOpen(false)} />
-      )}
-      {isRuleManagerOpen && (
-        <RuleManagerModal onClose={() => setIsRuleManagerOpen(false)} />
       )}
     </div>
   );

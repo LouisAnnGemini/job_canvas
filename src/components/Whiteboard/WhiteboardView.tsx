@@ -25,6 +25,8 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
     initialPositions: Map<string, Point>;
   } | null>(null);
 
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   const filteredTasks = tasks.filter(t => {
@@ -34,7 +36,9 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
       const col = columns.find(c => c.id === colId);
       if (!col) continue;
       const val = col.isCustom ? t.customFields[colId] : (t as any)[col.field];
-      const valArray = Array.isArray(val) ? val : (val ? [val] : []);
+      const valArray = Array.isArray(val) 
+        ? val.map(v => String(v)) 
+        : (val !== null && val !== undefined ? [String(val)] : []);
       if (!opts.some(o => valArray.includes(o))) return false;
     }
     return true;
@@ -51,6 +55,7 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
   }, [transform]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isSpacePressed) return; // Prevent creating card if panning intent
     const target = e.target as HTMLElement;
     if (target.id === 'whiteboard-bg') {
       const pos = screenToCanvas(e.clientX, e.clientY);
@@ -91,7 +96,7 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
   }, [transform, screenToCanvas]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    if (e.button === 1 || (e.button === 0 && (e.altKey || isSpacePressed))) {
       setIsPanning(true);
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
@@ -266,7 +271,9 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
       
       const key = e.key.toLowerCase();
       
-      if (key === 'h') {
+      if (key === ' ') {
+        setIsSpacePressed(true);
+      } else if (key === 'h') {
         e.preventDefault();
         handleAlign('h');
       } else if (key === 'v') {
@@ -277,8 +284,19 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
         handleCreateFrame();
       }
     };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        setIsSpacePressed(false);
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, [handleAlign, handleCreateFrame]);
 
   const startDrag = (e: React.PointerEvent, type: 'card' | 'frame', id: string) => {
@@ -315,7 +333,7 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
   return (
     <div 
       ref={containerRef}
-      className="w-full h-full overflow-hidden bg-[#E4E3E0] relative touch-none"
+      className={`w-full h-full overflow-hidden bg-[#E4E3E0] relative touch-none ${isPanning ? "cursor-grabbing" : (isSpacePressed ? "cursor-grab" : "")}`}
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

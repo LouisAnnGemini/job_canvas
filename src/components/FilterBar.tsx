@@ -11,7 +11,7 @@ function cn(...inputs: any[]) {
 
 export function FilterBar() {
   const { columns, searchQuery, setSearchQuery, filters, setFilter, clearFilters } = useStore();
-  const filterableColumns = columns.filter(c => c.type === 'select' || c.type === 'multi-select');
+  const filterableColumns = columns.filter(c => c.type === 'select' || c.type === 'multi-select' || c.type === 'checkbox');
 
   const hasFilters = searchQuery !== '' || Object.values(filters).some(arr => arr.length > 0);
 
@@ -41,6 +41,8 @@ export function FilterBar() {
         
         {filterableColumns.map(col => {
           const selected = filters[col.id] || [];
+          const options = col.type === 'checkbox' ? ['Checked', 'Unchecked'] : (col.options || []);
+          
           return (
             <div key={col.id} className="relative group">
               <select
@@ -60,11 +62,14 @@ export function FilterBar() {
                 }}
               >
                 <option value="" disabled>{col.name} {selected.length > 0 ? `(${selected.length})` : ''}</option>
-                {col.options?.map(opt => (
-                  <option key={opt} value={opt}>
-                    {selected.includes(opt) ? '✓ ' : ''}{opt}
-                  </option>
-                ))}
+                {options.map(opt => {
+                  const value = col.type === 'checkbox' ? (opt === 'Checked' ? 'true' : 'false') : opt;
+                  return (
+                    <option key={value} value={value}>
+                      {selected.includes(value) ? '✓ ' : ''}{opt}
+                    </option>
+                  );
+                })}
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
                 <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">

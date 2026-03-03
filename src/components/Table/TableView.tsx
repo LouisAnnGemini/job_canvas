@@ -52,7 +52,9 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
       const col = columns.find(c => c.id === colId);
       if (!col) continue;
       const val = col.isCustom ? t.customFields[colId] : (t as any)[col.field];
-      const valArray = Array.isArray(val) ? val : (val ? [val] : []);
+      const valArray = Array.isArray(val) 
+        ? val.map(v => String(v)) 
+        : (val !== null && val !== undefined ? [String(val)] : []);
       if (!opts.some(o => valArray.includes(o))) return false;
     }
     return true;
@@ -390,6 +392,9 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
             Click to add row
           </div>
         </div>
+        
+        {/* Spacer to allow scrolling past the last item */}
+        <div className="h-[50vh] w-full pointer-events-none" />
       </div>
 
       {addingColumn && (
