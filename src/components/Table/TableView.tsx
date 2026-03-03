@@ -554,20 +554,55 @@ function AutoResizingTextarea({ value, onChange, onKeyDown, autoFocus, onFocus, 
   );
 }
 
+import { createPortal } from 'react-dom';
+
 function MultiSelect({ options, selected, onChange, onAddOption, placeholder, optionColors, wrapText }: { options: string[], selected: string[], onChange: (val: string[]) => void, onAddOption: (val: string) => void, placeholder: string, optionColors?: Record<string, string>, wrapText?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        // Check if the click is inside the portal dropdown
+        const portalDropdown = document.getElementById('multiselect-portal-dropdown');
+        if (portalDropdown && portalDropdown.contains(e.target as Node)) {
+          return;
+        }
         setIsOpen(false);
       }
     };
+    
+    const handleScroll = () => {
+      if (isOpen) setIsOpen(false);
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    window.addEventListener('scroll', handleScroll, true);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [isOpen]);
+
+  const updatePosition = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: Math.max(rect.width, 200)
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updatePosition();
+    }
+  }, [isOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && inputValue.trim()) {
@@ -618,8 +653,16 @@ function MultiSelect({ options, selected, onChange, onAddOption, placeholder, op
           onFocus={() => setIsOpen(true)}
         />
       </div>
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-zinc-200 rounded-lg shadow-lg z-10 max-h-48 overflow-auto py-1">
+      {isOpen && createPortal(
+        <div 
+          id="multiselect-portal-dropdown"
+          className="fixed bg-white border border-zinc-200 rounded-lg shadow-lg z-[9999] max-h-48 overflow-auto py-1"
+          style={{
+            top: dropdownPosition.top + 4,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width
+          }}
+        >
           {options.filter(o => o.toLowerCase().includes(inputValue.toLowerCase())).map(opt => (
             <div
               key={opt}
@@ -646,7 +689,8 @@ function MultiSelect({ options, selected, onChange, onAddOption, placeholder, op
               Create "{inputValue}"
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

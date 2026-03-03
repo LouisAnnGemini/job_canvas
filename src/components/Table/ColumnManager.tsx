@@ -96,14 +96,12 @@ export function ColumnManagerModal({ onClose }: { onClose: () => void }) {
                   >
                     {col.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                   </button>
-                  {col.isCustom && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); deleteColumn(col.id); if (selectedColId === col.id) setSelectedColId(null); }}
-                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); deleteColumn(col.id); if (selectedColId === col.id) setSelectedColId(null); }}
+                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}

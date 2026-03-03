@@ -10,12 +10,13 @@ interface Point { x: number; y: number }
 interface Rect { x: number; y: number; width: number; height: number }
 
 export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId: string) => void }) {
-  const { tasks, frames, updateTask, updateFrame, addFrame, deleteTasks, duplicateTasks, columns, searchQuery, filters } = useStore();
+  const { tasks, frames, updateTask, updateFrame, addFrame, deleteTasks, duplicateTasks, columns, searchQuery, filters, addTask } = useStore();
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [selectionBox, setSelectionBox] = useState<Rect | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchEditModalOpen, setBatchEditModalOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [dragState, setDragState] = useState<{
     type: 'card' | 'frame' | 'selection';
     id?: string;
@@ -48,6 +49,21 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
       y: (clientY - rect.top - transform.y) / transform.scale,
     };
   }, [transform]);
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.id === 'whiteboard-bg') {
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      // Center the card on the click position (card width is approx 260)
+      const newTask = addTask({
+        x: pos.x - 130,
+        y: pos.y - 20, // Slight offset for visual comfort
+        title: ''
+      });
+      setEditingTaskId(newTask.id);
+      setSelectedIds(new Set([newTask.id]));
+    }
+  };
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -305,6 +321,7 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
+      onDoubleClick={handleDoubleClick}
     >
       <div id="whiteboard-bg" className="absolute inset-0" style={{
         backgroundImage: `radial-gradient(#c8c8c8 1px, transparent 1px)`,
@@ -379,6 +396,9 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
               key={task.id} 
               task={task} 
               isSelected={selectedIds.has(task.id)}
+              isEditing={editingTaskId === task.id}
+              onStopEditing={() => setEditingTaskId(null)}
+              onDuplicate={() => duplicateTasks([task.id])}
               onPointerDown={(e) => startDrag(e, 'card', task.id)}
               onDoubleClick={(e) => { e.stopPropagation(); onOpenTaskDetail(task.id); }}
             />
