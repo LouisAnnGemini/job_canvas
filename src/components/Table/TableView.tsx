@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useStore, Task, Column, ColumnType } from '../../store/useStore';
-import { Check, Plus, Maximize2, Settings2 } from 'lucide-react';
+import { Check, Plus, Maximize2, Settings2, WrapText, Copy, Trash2, Edit2, GripVertical } from 'lucide-react';
+import { BatchEditModal } from '../BatchEditModal';
 import { getColorClasses } from '../../utils/colors';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -10,9 +11,30 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenColumnManager: () => void, onOpenTaskDetail: (taskId: string) => void }) {
-  const { tasks, columns, addTask, updateTask, addColumn, updateColumn, reorderColumns } = useStore();
+  const { tasks, columns, addTask, updateTask, addColumn, updateColumn, reorderColumns, wrapText, setWrapText, deleteTasks, duplicateTasks, searchQuery, filters, reorderTasks } = useStore();
   const [activeCell, setActiveCell] = useState<{ taskId: string; field: string } | null>(null);
   const [draggedColIndex, setDraggedColIndex] = useState<number | null>(null);
+  const [draggedRowIndex, setDraggedRowIndex] = useState<number | null>(null);
+  const [resizingCol, setResizingCol] = useState<{ id: string, startX: number, startWidth: number } | null>(null);
+
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [batchEditModalOpen, setBatchEditModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!resizingCol) return;
+    const handleMove = (e: PointerEvent) => {
+      const dx = e.clientX - resizingCol.startX;
+      const newWidth = Math.max(60, resizingCol.startWidth + dx);
+      updateColumn(resizingCol.id, { width: newWidth });
+    };
+    const handleUp = () => setResizingCol(null);
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [resizingCol, updateColumn]);
 
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColName, setNewColName] = useState('');
@@ -21,10 +43,23 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
   const [addingOptionFor, setAddingOptionFor] = useState<{taskId: string, colId: string} | null>(null);
   const [newOptValue, setNewOptValue] = useState('');
 
+  const filteredTasks = tasks.filter(t => {
+    if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase()) && !t.description.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    for (const [colId, opts] of Object.entries(filters)) {
+      if (opts.length === 0) continue;
+      const col = columns.find(c => c.id === colId);
+      if (!col) continue;
+      const val = col.isCustom ? t.customFields[colId] : (t as any)[col.field];
+      const valArray = Array.isArray(val) ? val : (val ? [val] : []);
+      if (!opts.some(o => valArray.includes(o))) return false;
+    }
+    return true;
+  });
+
   const visibleColumns = columns.filter(c => c.visible);
 
   const handleKeyDown = (e: React.KeyboardEvent, taskId: string, field: string, rowIndex: number) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (rowIndex === tasks.length - 1) {
         const newTask = addTask();
@@ -60,12 +95,7 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
     setDraggedColIndex(null);
   };
 
-  const getColWidth = (col: Column) => {
-    if (col.type === 'checkbox') return 'w-12';
-    if (col.field === 'title' || col.field === 'description') return 'w-64';
-    if (col.type === 'select') return 'w-32';
-    return 'w-48';
-  };
+
 
   return (
     <div className="w-full h-full overflow-auto p-8 bg-zinc-50">
@@ -73,6 +103,10 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-zinc-900">Tasks</h1>
           <div className="flex items-center gap-3">
+            <button onClick={() => setWrapText(!wrapText)} className={cn("flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm font-medium transition-colors shadow-sm", wrapText ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50")}>
+              <WrapText className="w-4 h-4" />
+              Wrap Text
+            </button>
             <button onClick={onOpenColumnManager} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-zinc-200 text-zinc-700 rounded-md text-sm font-medium hover:bg-zinc-50 transition-colors shadow-sm">
               <Settings2 className="w-4 h-4" />
               Manage Columns
@@ -84,23 +118,54 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
           </div>
         </div>
 
-        <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-left border-collapse">
+        <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden overflow-x-auto">
+          <table className="w-full text-left border-collapse table-fixed min-w-max">
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50/50">
-                <th className="w-10 p-3"></th>
+                <th className="w-16 p-0 sticky left-0 bg-zinc-50/50 z-20 border-r border-zinc-200">
+                  <div className="p-3 flex items-center justify-center h-full">
+                    <div
+                      className={cn(
+                        "w-4 h-4 rounded-full border flex items-center justify-center cursor-pointer transition-colors",
+                        selectedTaskIds.size === filteredTasks.length && filteredTasks.length > 0
+                          ? "bg-blue-600 border-blue-600"
+                          : "border-zinc-300 hover:border-blue-400 bg-white"
+                      )}
+                      onClick={() => {
+                        if (selectedTaskIds.size === filteredTasks.length && filteredTasks.length > 0) {
+                          setSelectedTaskIds(new Set());
+                        } else {
+                          setSelectedTaskIds(new Set(filteredTasks.map(t => t.id)));
+                        }
+                      }}
+                    >
+                      {selectedTaskIds.size === filteredTasks.length && filteredTasks.length > 0 && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      )}
+                    </div>
+                  </div>
+                </th>
                 {visibleColumns.map((col, index) => (
                   <th 
                     key={col.id} 
-                    className={cn("p-3 text-zinc-500 font-medium text-xs uppercase tracking-wider select-none", getColWidth(col))}
-                    draggable
+                    className="p-0 relative text-zinc-500 font-medium text-xs uppercase tracking-wider select-none group border-r border-zinc-200 last:border-r-0"
+                    style={{ width: col.width || 150 }}
+                    draggable={!resizingCol}
                     onDragStart={(e) => handleDragStart(e, index)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, index)}
                   >
-                    <div className="flex items-center gap-2 cursor-grab active:cursor-grabbing">
-                      {col.name}
+                    <div className="p-3 flex items-center gap-2 cursor-grab active:cursor-grabbing w-full h-full overflow-hidden">
+                      <span className="truncate">{col.name}</span>
                     </div>
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-500 active:bg-blue-600 z-10"
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setResizingCol({ id: col.id, startX: e.clientX, startWidth: col.width || 150 });
+                      }}
+                    />
                   </th>
                 ))}
                 <th className="p-3 w-12">
@@ -115,23 +180,69 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
               </tr>
             </thead>
             <tbody>
-              {tasks.map((task, rowIndex) => (
-                <tr key={task.id} className="border-b border-zinc-100 hover:bg-zinc-50/50 group transition-colors">
-                  <td className="p-3 text-center">
-                    <button 
-                      onClick={() => onOpenTaskDetail(task.id)}
-                      className="p-1 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200 rounded opacity-0 group-hover:opacity-100 transition-all"
-                      title="Expand Task"
-                    >
-                      <Maximize2 className="w-4 h-4" />
-                    </button>
+              {filteredTasks.map((task, rowIndex) => (
+                <tr 
+                  key={task.id} 
+                  className={cn(
+                    "border-b border-zinc-100 hover:bg-zinc-50/50 group transition-colors",
+                    draggedRowIndex === rowIndex ? "opacity-50" : ""
+                  )}
+                  draggable={!searchQuery && Object.values(filters).every(f => f.length === 0)}
+                  onDragStart={(e) => {
+                    setDraggedRowIndex(rowIndex);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggedRowIndex !== null && draggedRowIndex !== rowIndex) {
+                      reorderTasks(draggedRowIndex, rowIndex);
+                    }
+                    setDraggedRowIndex(null);
+                  }}
+                  onDragEnd={() => setDraggedRowIndex(null)}
+                >
+                  <td className="p-0 sticky left-0 bg-white group-hover:bg-zinc-50/50 z-10 border-r border-zinc-100">
+                    <div className="p-3 flex items-center justify-center gap-2 h-full">
+                      <div className="cursor-grab text-zinc-300 hover:text-zinc-500 active:cursor-grabbing">
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                      <div
+                        className={cn(
+                          "w-4 h-4 rounded-full border flex items-center justify-center cursor-pointer transition-colors",
+                          selectedTaskIds.has(task.id)
+                            ? "bg-blue-600 border-blue-600"
+                            : "border-zinc-300 hover:border-blue-400 bg-white"
+                        )}
+                        onClick={() => {
+                          const newSet = new Set(selectedTaskIds);
+                          if (selectedTaskIds.has(task.id)) newSet.delete(task.id);
+                          else newSet.add(task.id);
+                          setSelectedTaskIds(newSet);
+                        }}
+                      >
+                        {selectedTaskIds.has(task.id) && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => onOpenTaskDetail(task.id)}
+                        className="p-1.5 text-zinc-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                        title="Open Task Details"
+                      >
+                        <Maximize2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                   {visibleColumns.map(col => {
                     const value = col.isCustom ? task.customFields[col.id] : task[col.field as keyof Task];
                     
                     if (col.type === 'checkbox') {
                       return (
-                        <td key={col.id} className="p-3 text-center">
+                        <td key={col.id} className="p-3 text-center border-r border-zinc-100 last:border-r-0" style={{ width: col.width || 150 }}>
                           <button
                             onClick={() => updateTask(task.id, { [col.field]: !value })}
                             className={cn(
@@ -147,19 +258,18 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                     
                     if (col.type === 'text' || col.type === 'number') {
                       return (
-                        <td key={col.id} className="p-0">
-                          <input
-                            type={col.type === 'number' ? 'number' : 'text'}
+                        <td key={col.id} className="p-0 border-r border-zinc-100 last:border-r-0 align-top" style={{ width: col.width || 150 }}>
+                          <AutoResizingTextarea
+                            wrapText={wrapText}
                             className={cn(
-                              "w-full h-full p-3 bg-transparent outline-none focus:bg-blue-50/50 transition-colors text-sm",
                               col.field === 'title' ? "text-zinc-900 font-medium" : "text-zinc-600"
                             )}
                             value={value || ''}
-                            onChange={(e) => {
+                            onChange={(e: any) => {
                               if (col.isCustom) updateTask(task.id, { customFields: { ...task.customFields, [col.id]: e.target.value } });
                               else updateTask(task.id, { [col.field]: e.target.value });
                             }}
-                            onKeyDown={(e) => handleKeyDown(e, task.id, col.id, rowIndex)}
+                            onKeyDown={(e: any) => handleKeyDown(e, task.id, col.id, rowIndex)}
                             autoFocus={activeCell?.taskId === task.id && activeCell?.field === col.id}
                             onFocus={() => setActiveCell({ taskId: task.id, field: col.id })}
                             placeholder={col.name + "..."}
@@ -170,11 +280,12 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                     
                     if (col.type === 'select') {
                       return (
-                        <td key={col.id} className="p-3">
+                        <td key={col.id} className="p-0 border-r border-zinc-100 last:border-r-0 align-top" style={{ width: col.width || 150 }}>
                           <select
                             className={cn(
-                              "text-xs font-medium px-2 py-1 rounded-md outline-none cursor-pointer appearance-none border",
-                              !value ? "bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200" : getColorClasses(col.optionColors?.[value])
+                              "text-xs font-medium px-2 py-1.5 mx-3 my-2.5 rounded-md outline-none cursor-pointer appearance-none border max-w-[calc(100%-24px)]",
+                              !value ? "bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200" : getColorClasses(col.optionColors?.[value]),
+                              wrapText ? "whitespace-normal" : "whitespace-nowrap text-ellipsis overflow-hidden"
                             )}
                             value={value || ''}
                             onChange={(e) => {
@@ -197,8 +308,9 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                     
                     if (col.type === 'multi-select') {
                       return (
-                        <td key={col.id} className="p-3">
+                        <td key={col.id} className="p-2 border-r border-zinc-100 last:border-r-0 align-top" style={{ width: col.width || 150 }}>
                           <MultiSelect
+                            wrapText={wrapText}
                             options={col.options || []}
                             selected={value || []}
                             optionColors={col.optionColors}
@@ -321,11 +433,77 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
           </div>
         </div>
       )}
+
+      {selectedTaskIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-zinc-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-4">
+          <span className="text-sm font-medium">{selectedTaskIds.size} selected</span>
+          <div className="w-px h-4 bg-zinc-700" />
+          <button onClick={() => setBatchEditModalOpen(true)} className="flex items-center gap-1.5 text-sm hover:text-blue-400 transition-colors">
+            <Edit2 className="w-4 h-4" /> Edit
+          </button>
+          <button onClick={() => { duplicateTasks(Array.from(selectedTaskIds)); setSelectedTaskIds(new Set()); }} className="flex items-center gap-1.5 text-sm hover:text-emerald-400 transition-colors">
+            <Copy className="w-4 h-4" /> Duplicate
+          </button>
+          <button onClick={() => { deleteTasks(Array.from(selectedTaskIds)); setSelectedTaskIds(new Set()); }} className="flex items-center gap-1.5 text-sm hover:text-red-400 transition-colors">
+            <Trash2 className="w-4 h-4" /> Delete
+          </button>
+        </div>
+      )}
+
+      {batchEditModalOpen && (
+        <BatchEditModal 
+          taskIds={Array.from(selectedTaskIds)} 
+          onClose={() => {
+            setBatchEditModalOpen(false);
+            setSelectedTaskIds(new Set());
+          }} 
+        />
+      )}
     </div>
   );
 }
 
-function MultiSelect({ options, selected, onChange, onAddOption, placeholder, optionColors }: { options: string[], selected: string[], onChange: (val: string[]) => void, onAddOption: (val: string) => void, placeholder: string, optionColors?: Record<string, string> }) {
+function AutoResizingTextarea({ value, onChange, onKeyDown, autoFocus, onFocus, placeholder, className, wrapText }: any) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      if (wrapText) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      } else {
+        textareaRef.current.style.height = '100%';
+      }
+    }
+  }, [value, wrapText]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      className={cn(
+        "w-full h-full p-3 bg-transparent outline-none focus:bg-blue-50/50 transition-colors text-sm resize-none block",
+        wrapText ? "whitespace-normal break-words overflow-hidden" : "whitespace-nowrap overflow-hidden text-ellipsis",
+        className
+      )}
+      style={{ minHeight: wrapText ? '44px' : '100%' }}
+      value={value}
+      onChange={(e) => {
+        if (wrapText) {
+          e.target.style.height = 'auto';
+          e.target.style.height = `${e.target.scrollHeight}px`;
+        }
+        onChange(e);
+      }}
+      onKeyDown={onKeyDown}
+      autoFocus={autoFocus}
+      onFocus={onFocus}
+      placeholder={placeholder}
+      rows={1}
+    />
+  );
+}
+
+function MultiSelect({ options, selected, onChange, onAddOption, placeholder, optionColors, wrapText }: { options: string[], selected: string[], onChange: (val: string[]) => void, onAddOption: (val: string) => void, placeholder: string, optionColors?: Record<string, string>, wrapText?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -365,9 +543,12 @@ function MultiSelect({ options, selected, onChange, onAddOption, placeholder, op
   };
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative h-full" ref={containerRef}>
       <div 
-        className="min-h-[32px] p-1 border border-transparent hover:border-zinc-200 rounded flex flex-wrap gap-1 items-center cursor-text transition-colors"
+        className={cn(
+          "min-h-[32px] p-1 border border-transparent hover:border-zinc-200 rounded flex gap-1 items-center cursor-text transition-colors",
+          wrapText ? "flex-wrap" : "flex-nowrap overflow-hidden"
+        )}
         onClick={() => setIsOpen(true)}
       >
         {selected.map(s => (

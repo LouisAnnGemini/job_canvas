@@ -3,9 +3,13 @@ import { TableView } from './components/Table/TableView';
 import { WhiteboardView } from './components/Whiteboard/WhiteboardView';
 import { ColumnManagerModal } from './components/Table/ColumnManager';
 import { TaskDetailModal } from './components/TaskDetail/TaskDetailModal';
-import { LayoutGrid, TableProperties } from 'lucide-react';
+import { FilterBar } from './components/FilterBar';
+import { TemplateManagerModal } from './components/Templates/TemplateManagerModal';
+import { UseTemplateModal } from './components/Templates/UseTemplateModal';
+import { LayoutGrid, TableProperties, FileText, FilePlus, Download, Upload } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useStore } from './store/useStore';
 
 function cn(...inputs: any[]) {
   return twMerge(clsx(inputs));
@@ -15,6 +19,46 @@ export default function App() {
   const [view, setView] = useState<'table' | 'whiteboard'>('table');
   const [isColumnManagerOpen, setIsColumnManagerOpen] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
+  const [isUseTemplateOpen, setIsUseTemplateOpen] = useState(false);
+
+  const handleExport = () => {
+    const state = useStore.getState();
+    const data = JSON.stringify({
+      tasks: state.tasks,
+      columns: state.columns,
+      frames: state.frames,
+      templates: state.templates
+    }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'taskflow-export.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        useStore.setState({
+          tasks: data.tasks || [],
+          columns: data.columns || [],
+          frames: data.frames || [],
+          templates: data.templates || []
+        });
+      } catch (err) {
+        alert('Invalid file format');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  };
 
   return (
     <div className="w-screen h-screen flex flex-col bg-white overflow-hidden font-sans">
@@ -50,8 +94,41 @@ export default function App() {
           </button>
         </div>
         
-        <div className="w-8" /> {/* Spacer for balance */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 mr-2 border-r border-zinc-200 pr-3">
+            <button 
+              onClick={handleExport}
+              className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+              title="Export Data"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            <label 
+              className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
+              title="Import Data"
+            >
+              <Upload className="w-4 h-4" />
+              <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+            </label>
+          </div>
+          <button 
+            onClick={() => setIsTemplateManagerOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Templates
+          </button>
+          <button 
+            onClick={() => setIsUseTemplateOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200"
+          >
+            <FilePlus className="w-4 h-4" />
+            Use Template
+          </button>
+        </div>
       </header>
+
+      <FilterBar />
 
       {/* Main Content */}
       <main className="flex-1 relative">
@@ -72,7 +149,17 @@ export default function App() {
         <ColumnManagerModal onClose={() => setIsColumnManagerOpen(false)} />
       )}
       {expandedTaskId && (
-        <TaskDetailModal taskId={expandedTaskId} onClose={() => setExpandedTaskId(null)} />
+        <TaskDetailModal 
+          taskId={expandedTaskId} 
+          onClose={() => setExpandedTaskId(null)} 
+          onOpenTaskDetail={setExpandedTaskId}
+        />
+      )}
+      {isTemplateManagerOpen && (
+        <TemplateManagerModal onClose={() => setIsTemplateManagerOpen(false)} />
+      )}
+      {isUseTemplateOpen && (
+        <UseTemplateModal onClose={() => setIsUseTemplateOpen(false)} />
       )}
     </div>
   );

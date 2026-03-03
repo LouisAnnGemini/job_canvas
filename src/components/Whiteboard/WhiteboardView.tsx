@@ -3,16 +3,19 @@ import { useStore, Task, Frame } from '../../store/useStore';
 import { TaskCard } from './TaskCard';
 import { FrameNode } from './FrameNode';
 import { WhiteboardContext } from './WhiteboardContext';
+import { Copy, Trash2, Edit2 } from 'lucide-react';
+import { BatchEditModal } from '../BatchEditModal';
 
 interface Point { x: number; y: number }
 interface Rect { x: number; y: number; width: number; height: number }
 
 export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId: string) => void }) {
-  const { tasks, frames, updateTask, updateFrame, addFrame } = useStore();
+  const { tasks, frames, updateTask, updateFrame, addFrame, deleteTasks, duplicateTasks, columns, searchQuery, filters } = useStore();
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [selectionBox, setSelectionBox] = useState<Rect | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchEditModalOpen, setBatchEditModalOpen] = useState(false);
   const [dragState, setDragState] = useState<{
     type: 'card' | 'frame' | 'selection';
     id?: string;
@@ -22,6 +25,19 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
   } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const filteredTasks = tasks.filter(t => {
+    if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase()) && !t.description.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    for (const [colId, opts] of Object.entries(filters)) {
+      if (opts.length === 0) continue;
+      const col = columns.find(c => c.id === colId);
+      if (!col) continue;
+      const val = col.isCustom ? t.customFields[colId] : (t as any)[col.field];
+      const valArray = Array.isArray(val) ? val : (val ? [val] : []);
+      if (!opts.some(o => valArray.includes(o))) return false;
+    }
+    return true;
+  });
 
   // Convert screen coordinates to canvas coordinates
   const screenToCanvas = useCallback((clientX: number, clientY: number) => {
@@ -186,6 +202,47 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
     } catch (err) {}
   };
 
+  const handleAlign = useCallback((type: 'h' | 'v') => {
+    const targetIds = selectedIds.size > 1 ? Array.from(selectedIds) : filteredTasks.map(t => t.id);
+    if (targetIds.length === 0) return;
+    
+    const targetTasks = filteredTasks.filter(t => targetIds.includes(t.id));
+    
+    if (type === 'h') {
+      const avgY = targetTasks.reduce((sum, t) => sum + t.y, 0) / targetTasks.length;
+      targetTasks.sort((a, b) => a.x - b.x);
+      const startX = targetTasks[0].x;
+      const spacing = 280;
+      targetTasks.forEach((t, i) => updateTask(t.id, { x: startX + i * spacing, y: avgY }));
+    } else if (type === 'v') {
+      const avgX = targetTasks.reduce((sum, t) => sum + t.x, 0) / targetTasks.length;
+      targetTasks.sort((a, b) => a.y - b.y);
+      const startY = targetTasks[0].y;
+      const spacing = 130;
+      targetTasks.forEach((t, i) => updateTask(t.id, { x: avgX, y: startY + i * spacing }));
+    }
+  }, [selectedIds, filteredTasks, updateTask]);
+
+  const handleCreateFrame = useCallback(() => {
+    if (selectedIds.size < 2) return;
+    const selectedTasks = filteredTasks.filter(t => selectedIds.has(t.id));
+    const minX = Math.min(...selectedTasks.map(t => t.x));
+    const minY = Math.min(...selectedTasks.map(t => t.y));
+    const maxX = Math.max(...selectedTasks.map(t => t.x + 250));
+    const maxY = Math.max(...selectedTasks.map(t => t.y + 150));
+    
+    const padding = 40;
+    const newFrame = addFrame({
+      x: minX - padding,
+      y: minY - padding,
+      width: maxX - minX + padding * 2,
+      height: maxY - minY + padding * 2,
+      name: 'New Frame'
+    });
+    
+    selectedTasks.forEach(t => updateTask(t.id, { frameId: newFrame.id }));
+  }, [selectedIds, filteredTasks, addFrame, updateTask]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -193,61 +250,20 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
       
       const key = e.key.toLowerCase();
       
-      if (key === 'h' || key === 'v') {
+      if (key === 'h') {
         e.preventDefault();
-        const targetIds = selectedIds.size > 1 ? Array.from(selectedIds) : tasks.map(t => t.id);
-        if (targetIds.length === 0) return;
-        
-        const targetTasks = tasks.filter(t => targetIds.includes(t.id));
-        
-        if (key === 'h') {
-          // Align horizontal
-          const avgY = targetTasks.reduce((sum, t) => sum + t.y, 0) / targetTasks.length;
-          
-          // Sort by X and distribute evenly
-          targetTasks.sort((a, b) => a.x - b.x);
-          const startX = targetTasks[0].x;
-          const spacing = 280; // card width + gap
-          
-          targetTasks.forEach((t, i) => {
-            updateTask(t.id, { x: startX + i * spacing, y: avgY });
-          });
-        } else if (key === 'v') {
-          // Align vertical
-          const avgX = targetTasks.reduce((sum, t) => sum + t.x, 0) / targetTasks.length;
-          
-          targetTasks.sort((a, b) => a.y - b.y);
-          const startY = targetTasks[0].y;
-          const spacing = 180; // card height + gap
-          
-          targetTasks.forEach((t, i) => {
-            updateTask(t.id, { x: avgX, y: startY + i * spacing });
-          });
-        }
-      } else if (key === 'f' && selectedIds.size > 1) {
+        handleAlign('h');
+      } else if (key === 'v') {
         e.preventDefault();
-        // Create frame around selection
-        const selectedTasks = tasks.filter(t => selectedIds.has(t.id));
-        const minX = Math.min(...selectedTasks.map(t => t.x));
-        const minY = Math.min(...selectedTasks.map(t => t.y));
-        const maxX = Math.max(...selectedTasks.map(t => t.x + 250));
-        const maxY = Math.max(...selectedTasks.map(t => t.y + 150));
-        
-        const padding = 40;
-        const newFrame = addFrame({
-          x: minX - padding,
-          y: minY - padding,
-          width: maxX - minX + padding * 2,
-          height: maxY - minY + padding * 2,
-          name: 'New Frame'
-        });
-        
-        selectedTasks.forEach(t => updateTask(t.id, { frameId: newFrame.id }));
+        handleAlign('v');
+      } else if (key === 'f') {
+        e.preventDefault();
+        handleCreateFrame();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, tasks, updateTask, addFrame]);
+  }, [handleAlign, handleCreateFrame]);
 
   const startDrag = (e: React.PointerEvent, type: 'card' | 'frame', id: string) => {
     e.stopPropagation();
@@ -303,6 +319,51 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
           }}
         >
+          {/* Render Links */}
+          <svg className="absolute inset-0 pointer-events-none overflow-visible" style={{ zIndex: 0 }}>
+            <defs>
+              <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+              </marker>
+            </defs>
+            {filteredTasks.flatMap(task => 
+              (task.linkedTaskIds || []).map(targetId => {
+                const target = filteredTasks.find(t => t.id === targetId);
+                if (!target) return null;
+                
+                const startX = task.x + 125; // Center of card (width 250)
+                const startY = task.y + 60;  // Approx center vertically
+                const endX = target.x + 125;
+                const endY = target.y + 60;
+                
+                // Calculate intersection with target card (approximate as a circle or rectangle)
+                // To make the arrow visible, we need to shorten the line so it doesn't end exactly at the center
+                const dx = endX - startX;
+                const dy = endY - startY;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                
+                // Card is roughly 250x120, radius approx 130
+                // Reduced slightly to ensure connection is visible even when close
+                const shortenBy = 120; 
+                
+                if (length <= shortenBy) return null; // Too close to draw
+                
+                const ratio = (length - shortenBy) / length;
+                const adjustedEndX = startX + dx * ratio;
+                const adjustedEndY = startY + dy * ratio;
+                
+                return (
+                  <line 
+                    key={`${task.id}-${target.id}`}
+                    x1={startX} y1={startY} x2={adjustedEndX} y2={adjustedEndY}
+                    stroke="#94a3b8" strokeWidth="2" strokeDasharray="5,5"
+                    markerEnd="url(#arrowhead)"
+                  />
+                );
+              })
+            )}
+          </svg>
+
           {/* Render Frames */}
           {frames.map(frame => (
             <FrameNode 
@@ -313,7 +374,7 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
           ))}
 
           {/* Render Tasks */}
-          {tasks.map(task => (
+          {filteredTasks.map(task => (
             <TaskCard 
               key={task.id} 
               task={task} 
@@ -342,15 +403,33 @@ export function WhiteboardView({ onOpenTaskDetail }: { onOpenTaskDetail: (taskId
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-zinc-200 flex items-center gap-4 text-sm text-zinc-600 font-medium">
         <span><kbd className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">Space</kbd> + Drag to pan</span>
         <span><kbd className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">Ctrl</kbd> + Scroll to zoom</span>
+        {selectedIds.size > 0 && (
+          <>
+            <div className="w-px h-4 bg-zinc-300" />
+            <button onClick={() => setBatchEditModalOpen(true)} className="flex items-center gap-1 hover:text-blue-600 transition-colors" title="Batch Edit"><Edit2 className="w-4 h-4"/></button>
+            <button onClick={() => { duplicateTasks(Array.from(selectedIds)); setSelectedIds(new Set()); }} className="flex items-center gap-1 hover:text-emerald-600 transition-colors" title="Duplicate"><Copy className="w-4 h-4"/></button>
+            <button onClick={() => { deleteTasks(Array.from(selectedIds)); setSelectedIds(new Set()); }} className="flex items-center gap-1 hover:text-red-600 transition-colors" title="Delete"><Trash2 className="w-4 h-4"/></button>
+          </>
+        )}
         {selectedIds.size > 1 && (
           <>
             <div className="w-px h-4 bg-zinc-300" />
-            <span><kbd className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">H</kbd> Align Horiz</span>
-            <span><kbd className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">V</kbd> Align Vert</span>
-            <span><kbd className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">F</kbd> Create Frame</span>
+            <button onClick={() => handleAlign('h')} title="Align Horizontal"><kbd className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">H</kbd></button>
+            <button onClick={() => handleAlign('v')} title="Align Vertical"><kbd className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">V</kbd></button>
+            <button onClick={() => handleCreateFrame()} title="Create Frame"><kbd className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">F</kbd></button>
           </>
         )}
       </div>
+
+      {batchEditModalOpen && (
+        <BatchEditModal 
+          taskIds={Array.from(selectedIds)} 
+          onClose={() => {
+            setBatchEditModalOpen(false);
+            setSelectedIds(new Set());
+          }} 
+        />
+      )}
     </div>
   );
 }

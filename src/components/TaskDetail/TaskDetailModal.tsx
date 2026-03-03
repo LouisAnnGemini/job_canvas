@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore, Task, Column } from '../../store/useStore';
-import { X, Check } from 'lucide-react';
+import { X, Check, Link as LinkIcon, Plus } from 'lucide-react';
 import { getColorClasses } from '../../utils/colors';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -9,8 +9,8 @@ function cn(...inputs: any[]) {
   return twMerge(clsx(inputs));
 }
 
-export function TaskDetailModal({ taskId, onClose }: { taskId: string, onClose: () => void }) {
-  const { tasks, columns, updateTask } = useStore();
+export function TaskDetailModal({ taskId, onClose, onOpenTaskDetail }: { taskId: string, onClose: () => void, onOpenTaskDetail: (id: string) => void }) {
+  const { tasks, columns, updateTask, linkTasks, unlinkTasks } = useStore();
   const task = tasks.find(t => t.id === taskId);
 
   if (!task) return null;
@@ -55,7 +55,7 @@ export function TaskDetailModal({ taskId, onClose }: { taskId: string, onClose: 
                   {!col.visible && <span className="text-[10px] uppercase tracking-wider bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded">Hidden in Table</span>}
                 </label>
                 
-                {col.type === 'text' || col.type === 'number' ? (
+                {col.type === 'text' || col.type === 'number' || col.type === 'date' ? (
                   col.field === 'description' ? (
                     <textarea
                       className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm text-zinc-900 min-h-[100px] resize-y"
@@ -68,7 +68,7 @@ export function TaskDetailModal({ taskId, onClose }: { taskId: string, onClose: 
                     />
                   ) : (
                     <input
-                      type={col.type === 'number' ? 'number' : 'text'}
+                      type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
                       className={cn(
                         "w-full p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm text-zinc-900",
                         col.field === 'title' ? "text-lg font-medium" : ""
@@ -134,6 +134,56 @@ export function TaskDetailModal({ taskId, onClose }: { taskId: string, onClose: 
               </div>
             );
           })}
+          {/* Linked Tasks */}
+          <div className="mt-8 pt-6 border-t border-zinc-200">
+            <h4 className="text-sm font-medium text-zinc-900 mb-4 flex items-center gap-2">
+              <LinkIcon className="w-4 h-4 text-zinc-500" />
+              Linked Tasks
+            </h4>
+            
+            <div className="space-y-2">
+              {task.linkedTaskIds?.map(linkId => {
+                const linkedTask = tasks.find(t => t.id === linkId);
+                if (!linkedTask) return null;
+                return (
+                  <div key={linkId} className="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-200 rounded-lg group hover:border-blue-300 transition-colors">
+                    <button 
+                      onClick={() => {
+                        onClose();
+                        setTimeout(() => onOpenTaskDetail(linkId), 0);
+                      }} 
+                      className="text-sm text-blue-600 hover:underline text-left flex-1 truncate font-medium"
+                    >
+                      {linkedTask.title || 'Untitled Task'}
+                    </button>
+                    <button 
+                      onClick={() => unlinkTasks(task.id, linkId)} 
+                      className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                      title="Remove link"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+              
+              <div className="relative mt-2">
+                <select
+                  className="w-full p-2.5 pl-8 border border-zinc-300 rounded-lg text-sm outline-none focus:border-blue-500 appearance-none bg-white text-zinc-600"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) linkTasks(task.id, e.target.value);
+                  }}
+                >
+                  <option value="" disabled>+ Link to another task...</option>
+                  {tasks.filter(t => t.id !== task.id && !task.linkedTaskIds?.includes(t.id)).map(t => (
+                    <option key={t.id} value={t.id}>{t.title || 'Untitled Task'}</option>
+                  ))}
+                </select>
+                <Plus className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
