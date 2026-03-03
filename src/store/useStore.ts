@@ -4,6 +4,12 @@ import { v4 as uuidv4 } from 'uuid';
 
 export type ColumnType = 'checkbox' | 'text' | 'number' | 'select' | 'multi-select' | 'date';
 
+export interface LinkageRule {
+  triggerValue: string;
+  targetColumnId: string;
+  targetValue: string;
+}
+
 export interface Column {
   id: string;
   field: string;
@@ -14,6 +20,7 @@ export interface Column {
   options?: string[];
   optionColors?: Record<string, string>;
   width?: number;
+  linkageRules?: LinkageRule[];
 }
 
 export interface Task {
@@ -165,9 +172,52 @@ export const useStore = create<AppState>()(
     return newTask;
   },
   
-  updateTask: (id, updates) => set((state) => ({
-    tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
-  })),
+  updateTask: (id, updates) => set((state) => {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return {};
+
+    let newUpdates = { ...updates };
+    let newCustomFields = updates.customFields ? { ...updates.customFields } : { ...task.customFields };
+
+    state.columns.forEach(col => {
+      if (!col.linkageRules || col.linkageRules.length === 0) return;
+
+      let newValue = undefined;
+      let oldValue = undefined;
+
+      if (col.isCustom) {
+        if (updates.customFields && col.id in updates.customFields) {
+           newValue = updates.customFields[col.id];
+           oldValue = task.customFields[col.id];
+        }
+      } else {
+        if (col.field in updates) {
+           newValue = (updates as any)[col.field];
+           oldValue = (task as any)[col.field];
+        }
+      }
+
+      if (newValue !== undefined && newValue !== oldValue) {
+        const rule = col.linkageRules.find(r => r.triggerValue === newValue);
+        if (rule) {
+          const targetCol = state.columns.find(c => c.id === rule.targetColumnId);
+          if (targetCol) {
+            if (targetCol.isCustom) {
+              newCustomFields[targetCol.id] = rule.targetValue;
+            } else {
+              (newUpdates as any)[targetCol.field] = rule.targetValue;
+            }
+          }
+        }
+      }
+    });
+
+    newUpdates.customFields = newCustomFields;
+
+    return {
+      tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...newUpdates } : t)),
+    };
+  }),
   
   updateTasks: (ids, updates, customUpdates) => set((state) => ({
     tasks: state.tasks.map(t => {

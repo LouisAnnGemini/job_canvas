@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useStore, Task, Column, ColumnType } from '../../store/useStore';
-import { Check, Plus, Maximize2, Settings2, WrapText, Copy, Trash2, Edit2, GripVertical } from 'lucide-react';
+import { Check, Plus, Maximize2, Settings2, WrapText, Copy, Trash2, Edit2, GripVertical, Link as LinkIcon } from 'lucide-react';
 import { BatchEditModal } from '../BatchEditModal';
+import { ColumnLinkageModal } from './ColumnLinkageModal';
 import { getColorClasses } from '../../utils/colors';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -19,6 +20,7 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
 
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [batchEditModalOpen, setBatchEditModalOpen] = useState(false);
+  const [activeLinkageColumnId, setActiveLinkageColumnId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!resizingCol) return;
@@ -157,6 +159,18 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
                   >
                     <div className="p-3 flex items-center gap-2 cursor-grab active:cursor-grabbing w-full h-full overflow-hidden">
                       <span className="truncate">{col.name}</span>
+                      {col.isCustom && (col.type === 'select' || col.type === 'multi-select' || col.type === 'text') && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveLinkageColumnId(col.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-200 rounded text-zinc-400 hover:text-zinc-600 transition-all ml-auto"
+                          title="Configure Linkage"
+                        >
+                          <LinkIcon className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-500 active:bg-blue-600 z-10"
@@ -474,6 +488,13 @@ export function TableView({ onOpenColumnManager, onOpenTaskDetail }: { onOpenCol
             setBatchEditModalOpen(false);
             setSelectedTaskIds(new Set());
           }} 
+        />
+      )}
+
+      {activeLinkageColumnId && (
+        <ColumnLinkageModal 
+          columnId={activeLinkageColumnId} 
+          onClose={() => setActiveLinkageColumnId(null)} 
         />
       )}
     </div>
