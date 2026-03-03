@@ -13,7 +13,7 @@ export function ColumnLinkageModal({ columnId, onClose }: { columnId: string, on
 
   if (!column) return null;
 
-  const targetColumns = columns.filter(c => c.id !== columnId && (c.type === 'text' || c.type === 'select' || c.type === 'number'));
+  const targetColumns = columns.filter(c => c.id !== columnId);
   const selectedTargetColumn = targetColumns.find(c => c.id === newTargetColumnId);
 
   const handleAddRule = () => {
@@ -75,6 +75,16 @@ export function ColumnLinkageModal({ columnId, onClose }: { columnId: string, on
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
+                ) : column.type === 'checkbox' ? (
+                  <select 
+                    className="w-full p-2 border border-zinc-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"
+                    value={newTriggerValue}
+                    onChange={e => setNewTriggerValue(e.target.value)}
+                  >
+                    <option value="">Select state...</option>
+                    <option value="true">Checked</option>
+                    <option value="false">Unchecked</option>
+                  </select>
                 ) : (
                   <input 
                     type="text" 
@@ -121,6 +131,25 @@ export function ColumnLinkageModal({ columnId, onClose }: { columnId: string, on
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
+                ) : selectedTargetColumn?.type === 'checkbox' ? (
+                  <select 
+                    className="w-full p-2 border border-zinc-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"
+                    value={newTargetValue}
+                    onChange={e => setNewTargetValue(e.target.value)}
+                    disabled={!newTargetColumnId}
+                  >
+                    <option value="">Select state...</option>
+                    <option value="true">Checked</option>
+                    <option value="false">Unchecked</option>
+                  </select>
+                ) : selectedTargetColumn?.type === 'date' ? (
+                   <input 
+                    type="date"
+                    className="w-full p-2 border border-zinc-300 rounded-md text-sm outline-none focus:border-blue-500 bg-white"
+                    value={newTargetValue}
+                    onChange={e => setNewTargetValue(e.target.value)}
+                    disabled={!newTargetColumnId}
+                  />
                 ) : (
                   <input 
                     type={selectedTargetColumn?.type === 'number' ? 'number' : 'text'}

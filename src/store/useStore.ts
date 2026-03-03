@@ -192,14 +192,28 @@ export const useStore = create<AppState>()(
       }
 
       if (newValue !== undefined && newValue !== oldValue) {
-        const rule = col.linkageRules.find(r => r.triggerValue === newValue);
+        // Convert newValue to string for comparison
+        const comparisonValue = String(newValue);
+        
+        const rule = col.linkageRules.find(r => r.triggerValue === comparisonValue);
         if (rule) {
           const targetCol = state.columns.find(c => c.id === rule.targetColumnId);
           if (targetCol) {
+            let targetVal: any = rule.targetValue;
+
+            // Type conversion for target value
+            if (targetCol.type === 'checkbox') {
+              targetVal = rule.targetValue === 'true';
+            } else if (targetCol.type === 'number') {
+              targetVal = Number(rule.targetValue);
+            } else if (targetCol.type === 'multi-select') {
+              targetVal = [rule.targetValue];
+            }
+
             if (targetCol.isCustom) {
-              newCustomFields[targetCol.id] = rule.targetValue;
+              newCustomFields[targetCol.id] = targetVal;
             } else {
-              (newUpdates as any)[targetCol.field] = rule.targetValue;
+              (newUpdates as any)[targetCol.field] = targetVal;
             }
           }
         }
